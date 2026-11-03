@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0866ff">
+<title>Muantemama Media Downloader</title>
+<style>
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+    --primary: #0866ff;
+    --primary-dark: #0054d6;
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --text: #172033;
+    --muted: #728096;
+    --border: #e5eaf2;
+    --success: #16a34a;
+    --danger: #dc2626;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:
+        radial-gradient(circle at top right, rgba(8,102,255,.12), transparent 28%),
+        var(--bg);
+    color: var(--text);
+}
+
+.app {
+    width: min(100%, 600px);
+    margin: auto;
+    padding: 20px 18px 30px;
+}
+
+.header {
+    text-align: center;
+    padding: 10px 0 20px;
+}
+
+.logo {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 12px;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    color: white;
+    font-size: 28px;
+    background: linear-gradient(135deg, #0866ff, #5b9dff);
+    box-shadow: 0 12px 30px rgba(8,102,255,.25);
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 23px;
+    letter-spacing: -.5px;
+}
+
+.header p {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 6px 0 0;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid rgba(229,234,242,.9);
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: 0 10px 35px rgba(27,39,61,.06);
+    margin-bottom: 14px;
+}
+
+.label {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.url-row {
+    display: flex;
+    gap: 9px;
+}
+
+.input {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    background: #f9fbff;
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+    outline: none;
+    color: var(--text);
+}
+
+.input:focus {
+    border-color: var(--primary);
+    background: white;
+}
+
+.paste-btn {
+    border: 0;
+    background: #eaf2ff;
+    color: var(--primary);
+    font-weight: 700;
+    border-radius: 14px;
+    padding: 0 18px;
+    cursor: pointer;
+}
+
+.paste-btn:active {
+    transform: scale(.96);
+}
+
+.main-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 15px;
+    border: 0;
+    border-radius: 15px;
+    background: linear-gradient(135deg, var(--primary), #3181ff);
+    color: white;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(8,102,255,.2);
+}
+
+.main-btn:active,
+.download-btn:active,
+.quality:active {
+    transform: scale(.98);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.status-banner {
+    margin-top: 12px;
+    border-radius: 12px;
+    padding: 11px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    background: #eef5ff;
+    color: var(--primary-dark);
+}
+
+.status-banner.error {
+    background: #fef2f2;
+    color: var(--danger);
+}
+
+.status-banner.success {
+    background: #f0fdf4;
+    color: var(--success);
+}
+
+.video-preview {
+    overflow: hidden;
+    border-radius: 16px;
+    position: relative;
+    height: 110px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0f172a, #1e3a8a);
+    color: white;
+    font-size: 34px;
+}
+
+.video-info h2 {
+    font-size: 14px;
+    margin: 0 0 4px;
+    word-break: break-all;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.video-info p {
+    color: var(--muted);
+    margin: 0;
+    font-size: 12.5px;
+}
+
+.quality-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.quality {
+    text-align: left;
+    background: #fafcff;
+    border: 1.5px solid var(--border);
+    border-radius: 15px;
+    padding: 13px;
+    cursor: pointer;
+    transition: .2s;
+}
+
+.quality.selected {
+    border-color: var(--primary);
+    background: #eef5ff;
+    box-shadow: 0 0 0 3px rgba(8,102,255,.08);
+}
+
+.quality-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.quality strong {
+    font-size: 15px;
+}
+
+.badge {
+    font-size: 10px;
+    padding: 4px 7px;
+    border-radius: 8px;
+    color: var(--primary);
+    background: #dfeeff;
+    font-weight: 800;
+}
+
+.quality small {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+}
+
+.download-btn {
+    width: 100%;
+    margin-top: 15px;
+    border: 0;
+    padding: 16px;
+    border-radius: 15px;
+    background: #172033;
+    color: white;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.download-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.progress-wrap {
+    margin-top: 14px;
+}
+
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 7px;
+}
+
+.progress-bar {
+    height: 9px;
+    border-radius: 20px;
+    background: #e8edf5;
+    overflow: hidden;
+}
+
+.progress {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--primary), #63a0ff);
+    transition: width .25s ease;
+}
+
+.link-btn {
+    display: block;
+    text-align: center;
+    margin-top: 10px;
+    padding: 13px;
+    border-radius: 14px;
+    background: #eaf2ff;
+    color: var(--primary);
+    font-weight: 800;
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.hint {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+    margin: 10px 0 0;
+}
+
+.footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 8px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+    <div class="header">
+        <div class="logo">↓</div>
+        <h1>Muantemama Media Downloader</h1>
+        <p>I ta emaw, lak phalna i neih video-te chauh save rawh</p>
+    </div>
+
+    <div class="card">
+        <label class="label">Video Link (YouTube, FB, Insta, TikTok, Direct MP4)</label>
+
+        <div class="url-row">
+            <input
+                type="text"
+                id="videoUrl"
+                class="input"
+                placeholder="Video link hetah hian paste rawh..."
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <button type="button" class="paste-btn" id="pasteBtn">Paste</button>
+        </div>
+
+        <button type="button" class="main-btn" id="searchBtn">
+            🔍 Video Enpui Rawh
+        </button>
+
+        <div id="statusBanner" class="status-banner">
+            Link paste la, "Video Enpui Rawh" tih hmet rawh.
+        </div>
+    </div>
+
+    <div class="card hidden" id="videoCard">
+        <div class="video-preview">🎬</div>
+        <div class="video-info">
+            <h2 id="videoTitle">Video Link</h2>
+            <p id="videoMeta">Quality thlang la Download hmet rawh</p>
+        </div>
+    </div>
+
+    <div class="card hidden" id="qualityCard">
+        <span class="label">Video Quality Thlang Rawh</span>
+
+        <div class="quality-grid">
+            <button type="button" class="quality" data-quality="FHD 1080p">
+                <div class="quality-top">
+                    <strong>1080p</strong>
+                    <span class="badge">FHD</span>
+                </div>
+                <small>Fiah ber • File lian</small>
+            </button>
+
+            <button type="button" class="quality selected" data-quality="HD 720p">
+                <div class="quality-top">
+                    <strong>720p</strong>
+                    <span class="badge">HD</span>
+                </div>
+                <small>Fiah ṭha • Thlan tura ṭha</small>
+            </button>
+
+            <button type="button" class="quality" data-quality="SD 480p">
+                <div class="quality-top">
+                    <strong>480p</strong>
+                    <span class="badge">SD</span>
+                </div>
+                <small>File size te zawk</small>
+            </button>
+
+            <button type="button" class="quality" data-quality="Low 360p">
+                <div class="quality-top">
+                    <strong>360p</strong>
+                    <span class="badge">LOW</span>
+                </div>
+                <small>Data heh lo</small>
+            </button>
+        </div>
+
+        <button type="button" class="download-btn" id="downloadBtn">
+            ⬇ Download <span id="selectedText">HD 720p</span>
+        </button>
+
+        <div class="progress-wrap hidden" id="progressWrap">
+            <div class="progress-head">
+                <span id="progressStatus">Inbuatsaih mek...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+        </div>
+
+        <div class="hidden" id="saveWrap">
+            <button type="button" class="main-btn" id="saveFileBtn">💾 Phone-ah Save Rawh</button>
+            <a class="link-btn" id="safariLink" href="#" target="_blank" rel="noopener">🌐 Safari-in Download</a>
+            <p class="hint">"Save Video" thlang la Photos-ah save thei a ni, "Save to Files" pawh thlang theih.</p>
+        </div>
+    </div>
+
+    <div class="card hidden" id="serverCard">
+        <span class="label">⚙ Server Setting (iPhone / Browser atan)</span>
+        <input type="text" id="serverUrl" class="input" placeholder="https://ka-server.example.com"
+               autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="main-btn" id="saveServerBtn">Save</button>
+        <p class="hint">iPhone-ah video download tur chuan server URL dah hmasa la. API Key dah a ngai tawh lo.</p>
+    </div>
+
+    <div class="footer">
+        code for fun Muantemam-A • Windows, Android & iOS
+    </div>
+
+</div>
+
+<script>
+let selectedQuality = "HD 720p";
+
+const videoUrlInput = document.getElementById("videoUrl");
+const statusBanner = document.getElementById("statusBanner");
+const videoCard = document.getElementById("videoCard");
+const qualityCard = document.getElementById("qualityCard");
+const downloadBtn = document.getElementById("downloadBtn");
+const progressWrap = document.getElementById("progressWrap");
+const progress = document.getElementById("progress");
+const progressPercent = document.getElementById("progressPercent");
+const progressStatus = document.getElementById("progressStatus");
+
+function showMessage(msg, type = "normal") {
+    statusBanner.textContent = msg;
+    statusBanner.className = "status-banner";
+    if (type === "error") statusBanner.classList.add("error");
+    if (type === "success") statusBanner.classList.add("success");
+}
+
+function updateProgressUI(percent, statusText) {
+    progress.style.width = percent + "%";
+    progressPercent.textContent = percent + "%";
+    progressStatus.textContent = statusText;
+}
+
+// Quality selection logic
+document.querySelectorAll(".quality").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".quality").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedQuality = btn.getAttribute("data-quality");
+        document.getElementById("selectedText").textContent = selectedQuality;
+    });
+});
+
+// PASTE BUTTON
+document.getElementById("pasteBtn").addEventListener("click", async () => {
+    try {
+        let copiedText = "";
+
+        if (window.electronAPI?.readClipboard) {
+            copiedText = await window.electronAPI.readClipboard();
+        } else if (navigator.clipboard?.readText) {
+            copiedText = await navigator.clipboard.readText();
+        }
+
+        if (copiedText && copiedText.trim()) {
+            videoUrlInput.value = copiedText.trim();
+            showMessage("Link paste a ni e!", "success");
+            processVideo();
+        } else {
+            videoUrlInput.focus();
+            showMessage("Clipboard-ah link a awm lo. Input box-ah long-press la Paste hmet rawh.");
+        }
+    } catch (error) {
+        videoUrlInput.focus();
+        showMessage("Paste permission a nei lo. Input box-ah long-press la Paste hmet rawh.");
+    }
+});
+
+// VIDEO SEARCH / VALIDATION
+function processVideo() {
+    const url = videoUrlInput.value.trim();
+
+    if (!url) {
+        showMessage("Video link dah hmasa rawh.", "error");
+        return;
+    }
+
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+        showMessage("Video link dik dah rawh.", "error");
+        return;
+    }
+
+    document.getElementById("videoTitle").textContent = url;
+    document.getElementById("videoMeta").textContent =
+        "Quality thlang la Download hmet rawh.";
+
+    videoCard.classList.remove("hidden");
+    qualityCard.classList.remove("hidden");
+
+    showMessage("Link a pawm e. Quality thlang rawh.", "success");
+}
+
+document.getElementById("searchBtn").addEventListener("click", processVideo);
+
+function cleanError(err) {
+    return String((err && err.message) || err || "Unknown error")
+        .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+        .replace(/^Error:\s*/i, "");
+}
+
+// Android native side-ah atanga call tur (Java/Kotlin atangin evaluateJavascript hmangin)
+window.onAndroidProgress = (percent, status) => {
+    const p = Math.round(percent);
+    updateProgressUI(p, status || `Downloading... ${p}%`);
+};
+window.onAndroidDone = (msg) => {
+    updateProgressUI(100, "Download zo fel e!");
+    showMessage(msg || "Download a zo fel e!", "success");
+    downloadBtn.disabled = false;
+};
+window.onAndroidError = (msg) => {
+    progressStatus.textContent = "Download hlawhchham.";
+    showMessage("Error: " + msg, "error");
+    downloadBtn.disabled = false;
+};
+
+// ---------- Server mode (iPhone / Browser) ----------
+const isElectron = !!(window.electronAPI && window.electronAPI.downloadVideo);
+const isAndroidNative = !!(window.AndroidYtDlp && window.AndroidYtDlp.startYtDlpDownload);
+
+const serverCard = document.getElementById("serverCard");
+const serverUrlInput = document.getElementById("serverUrl");
+const saveWrap = document.getElementById("saveWrap");
+const saveFileBtn = document.getElementById("saveFileBtn");
+const safariLink = document.getElementById("safariLink");
+
+function lsGet(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+if (!isElectron && !isAndroidNative) {
+    serverCard.classList.remove("hidden");
+    serverUrlInput.value = lsGet("serverUrl") || "https://muantemama-server.onrender.com";
+}
+
+document.getElementById("saveServerBtn").addEventListener("click", () => {
+    let u = serverUrlInput.value.trim().replace(/\/+$/, "");
+    if (u && !/^https?:\/\//i.test(u)) u = "https://" + u;
+    serverUrlInput.value = u;
+    lsSet("serverUrl", u);
+    showMessage("Server setting save a ni e!", "success");
+});
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function serverError(res) {
+    try {
+        const j = await res.json();
+        if (j && j.error) return j.error;
+    } catch (e) {}
+    return "Server error (" + res.status + ")";
+}
+
+let pendingFile = null;
+
+async function downloadViaServer(url, quality) {
+    const base = lsGet("serverUrl").replace(/\/+$/, "");
+    if (!base) throw new Error("Server URL dah hmasa la, Save hmet rawh. (⚙ Server Setting)");
+
+    const headers = { "Content-Type": "application/json" };
+    saveWrap.classList.add("hidden");
+    pendingFile = null;
+
+    updateProgressUI(2, "Server-ah thawn mek...");
+    let res;
+    try {
+        res = await fetch(base + "/api/jobs", { method: "POST", headers, body: JSON.stringify({ url, quality }) });
+    } catch (e) {
+        throw new Error("Server hnenah connect theih a ni lo. Server URL (https) leh internet enfiah rawh.");
+    }
+    if (!res.ok) throw new Error(await serverError(res));
+    const { id } = await res.json();
+
+    // 1) Server-in video a download (0-70%)
+    let job;
+    for (let fails = 0; ;) {
+        await sleep(1200);
+        try {
+            res = await fetch(base + "/api/jobs/" + id, { headers });
+        } catch (e) {
+            if (++fails > 5) throw new Error("Server nen connection a bo.");
+            continue;
+        }
+        if (!res.ok) throw new Error(await serverError(res));
+        job = await res.json();
+        if (job.status === "error") throw new Error(job.message || "Download hlawhchham.");
+        if (job.status === "done") break;
+        const p = Math.round(job.percent || 0);
+        updateProgressUI(Math.max(3, Math.round(p * 0.7)), `Server-in download mek... ${p}%`);
+    }
+
+    // 2) Phone-ah file lak (70-100%)
+    updateProgressUI(70, "Phone-ah lak mek...");
+    res = await fetch(base + "/f/" + id);
+    if (!res.ok) throw new Error("File lak theih a ni lo.");
+    const total = parseInt(res.headers.get("content-length") || job.size || "0", 10);
+    const chunks = [];
+    let received = 0;
+
+    if (res.body && res.body.getReader) {
+        const reader = res.body.getReader();
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            if (total) updateProgressUI(70 + Math.round(30 * received / total), `Phone-ah lak mek... ${(received / 1048576).toFixed(1)} MB`);
+        }
+    } else {
+        chunks.push(new Uint8Array(await res.arrayBuffer()));
+        received = chunks[0].length;
+    }
+
+    const blob = new Blob(chunks, { type: "video/mp4" });
+    const filename = (job.filename || ("Muantemama-Video-" + Date.now() + ".mp4")).replace(/[\\/:*?"<>|]/g, "_");
+    pendingFile = new File([blob], filename, { type: "video/mp4" });
+
+    safariLink.href = base + "/f/" + id;
+    saveWrap.classList.remove("hidden");
+
+    const mb = (received / 1048576).toFixed(2);
+    updateProgressUI(100, `Download zo fel e! (${mb} MB)`);
+    showMessage("Download a zo fel e! A hnuaia \"Phone-ah Save Rawh\" hmet la, Save Video thlang rawh.", "success");
+}
+
+// iOS: Share sheet hi user tap-in a koh a ngai (download zawh hnuah hmet tur)
+saveFileBtn.addEventListener("click", async () => {
+    if (!pendingFile) return;
+    try {
+        if (navigator.canShare && navigator.canShare({ files: [pendingFile] })) {
+            await navigator.share({ files: [pendingFile] });
+            showMessage("Save a ni e!", "success");
+            return;
+        }
+        throw new Error("share unsupported");
+    } catch (e) {
+        if (e && e.name === "AbortError") return;
+        // Fallback: browser download
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(pendingFile);
+        a.download = pendingFile.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showMessage("Share a hlawhchham. \"Safari-in Download\" hmet leh rawh.", "error");
+    }
+});
+
+// 2. Mobile downloader (Android native / iOS server)
+async function downloadOnMobile(url, quality) {
+    if (isAndroidNative) {
+        // button disable-a awm zel a, onAndroidDone / onAndroidError hian enable leh ang
+        window.AndroidYtDlp.startYtDlpDownload(url, quality);
+        return;
+    }
+
+    // Server setting awm lo + direct video file nih chuan browser-in download
+    if (!lsGet("serverUrl") && url.match(/\.(mp4|m4v|mov|webm)(\?.*)?$/i)) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.setAttribute("download", `Muantemama-Video-${Date.now()}.mp4`);
+        a.setAttribute("target", "_blank");
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        updateProgressUI(100, "Download tan fel a ni!");
+        downloadBtn.disabled = false;
+        return;
+    }
+
+    await downloadViaServer(url, quality);
+    downloadBtn.disabled = false;
+}
+
+// 3. Unified Download Handler (Windows + Android APK)
+downloadBtn.addEventListener("click", async () => {
+    const url = videoUrlInput.value.trim();
+    if (!url) {
+        showMessage("Video link a awm lo.", "error");
+        return;
+    }
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+        showMessage("Video link dik dah rawh.", "error");
+        return;
+    }
+
+    downloadBtn.disabled = true;
+    progressWrap.classList.remove("hidden");
+    updateProgressUI(0, "Video stream zawng mek a ni...");
+    showMessage("Video download mek a ni, khawngaihin nghak lawk rawh...");
+
+    try {
+        // CASE 1: WINDOWS ELECTRON ENVIRONMENT
+        if (window.electronAPI && window.electronAPI.downloadVideo) {
+            if (window.electronAPI.onProgress) {
+                window.electronAPI.onProgress((data) => {
+                    updateProgressUI(data.percent, data.status);
+                });
+            }
+
+            const result = await window.electronAPI.downloadVideo({
+                url: url,
+                quality: selectedQuality
+            });
+
+            if (result && result.success) {
+                const sizeMB = (result.size / (1024 * 1024)).toFixed(2);
+                updateProgressUI(100, `Download zo fel e! (${sizeMB} MB)`);
+                showMessage(`Download a zo fel e (${sizeMB} MB)! Downloads folder-ah file a inhawng nghal.`, "success");
+            }
+            downloadBtn.disabled = false;
+        }
+        // CASE 2: ANDROID APK (native yt-dlp) / iPHONE (server)
+        else {
+            await downloadOnMobile(url, selectedQuality);
+        }
+    } catch (err) {
+        progressStatus.textContent = "Download hlawhchham.";
+        showMessage("Error: " + cleanError(err), "error");
+        downloadBtn.disabled = false;
+    }
+});
+</script>
+
+</body>
+</html>

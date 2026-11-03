@@ -10,7 +10,6 @@ const dns = require('dns').promises;
 const net = require('net');
 
 const PORT = parseInt(process.env.PORT || '8787', 10);
-const API_KEY = process.env.API_KEY || '';
 const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
 const FFMPEG_DIR = process.env.FFMPEG_DIR || '';              // ffmpeg PATH-ah a awm loh chuan
 const COOKIES_FILE = process.env.COOKIES_FILE || '';          // optional: Instagram/YouTube login atan
@@ -20,10 +19,6 @@ const TTL_MS = 15 * 60 * 1000;                                // file a awm rei 
 const MAX_RUNNING = parseInt(process.env.MAX_RUNNING || '2', 10);
 const JOBS_PER_HOUR = parseInt(process.env.JOBS_PER_HOUR || '30', 10);
 
-if (!API_KEY || API_KEY.length < 8) {
-    console.error('API_KEY set a ngai (a tlem berah character 8). Entirnan: API_KEY=ka-key-sang-tak node server.js');
-    process.exit(1);
-}
 fs.mkdirSync(WORK_DIR, { recursive: true });
 
 const jobs = new Map();
@@ -186,11 +181,6 @@ app.get('/f/:id', (req, res) => {
     fs.createReadStream(job.file).pipe(res);
 });
 
-// /api/* chu key mamawh
-app.use('/api', (req, res, next) => {
-    if (!safeEqual(req.get('x-api-key') || '', API_KEY)) return res.status(401).json({ error: 'API key dik lo.' });
-    next();
-});
 
 app.post('/api/jobs', async (req, res) => {
     try {
