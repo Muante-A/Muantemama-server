@@ -12,6 +12,7 @@ const net = require('net');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
 const FFMPEG_DIR = process.env.FFMPEG_DIR || '';
+const FFMPEG_PATH = process.env.FFMPEG_PATH || (FFMPEG_DIR ? path.join(FFMPEG_DIR, 'ffmpeg') : 'ffmpeg');
 const COOKIES_FILE = process.env.COOKIES_FILE || '';
 const WORK_DIR = process.env.WORK_DIR || path.join(os.tmpdir(), 'muantemama-jobs');
 const MAX_FILESIZE = process.env.MAX_FILESIZE || '1G';
@@ -150,7 +151,6 @@ function startJob(job) {
         '-f', 'bestvideo+bestaudio/best',
         '-S', `res:${height},vcodec:h264,acodec:aac,ext:mp4:m4a`,
         '--merge-output-format', 'mp4',
-        '--remux-video', 'mp4',
         '--no-playlist',
         '--windows-filenames',
         '--no-mtime',
@@ -220,32 +220,64 @@ function startJob(job) {
         console.error('YT-DLP SPAWN ERROR:', e.message);
     });
 
-    proc.on('close', code => {
+    proc.on('close', async code => {
         clearTimeout(killTimer);
-
         console.error('YT-DLP EXIT CODE:', code);
 
         if (job.status === 'error') return;
 
-        if (code === 0) {
-            const out = findOutput(job.dir);
+        if (code !== 0) {
+            job.status = 'error';
+            job.message = lastErrorLine(stderr);
+            return;
+        }
 
-            if (out) {
-                job.status = 'done';
-                job.percent = 100;
-                job.file = out.p;
-                job.filename = out.f;
-                job.size = out.size;
-                job.message = 'Zo fel e';
+        const out = findOutput(job.dir);
+        if (!out) {
+            job.status = 'error';
+            job.message = 'Video file siam a ni lo.';
+            return;
+        }
+
+        // Convert to iPhone-friendly MP4: H.264 video + AAC audio.
+        const mp4Name = path.basename(out.f).replace(/\\.[^.]+$/, '') + '.mp4';
+        const mp4Path = path.join(job.dir, mp4Name);
+        job.message = 'iPhone tan MP4 convert mek...';
+        job.percent = 99;
+
+        const ff = spawn(FFMPEG_PATH, [
+            '-y', '-i', out.p,
+            '-map', '0:v:0', '-map', '0:a?',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', '+faststart',
+            mp4Path
+        ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+        let ffError = '';
+        ff.stderr.on('data', d => { ffError += d.toString(); });
+        ff.on('error', e => {
+            job.status = 'error';
+            job.message = 'FFmpeg awm lo. Render-ah ffmpeg install ngai: ' + e.message;
+            console.error('FFMPEG SPAWN ERROR:', e.message);
+        });
+        ff.on('close', ffCode => {
+            if (job.status === 'error') return;
+            if (ffCode !== 0 || !fs.existsSync(mp4Path) || fs.statSync(mp4Path).size === 0) {
+                job.status = 'error';
+                job.message = ffError.trim().split(/\\r?\\n/).slice(-1)[0] || 'MP4 conversion a hlawhchham.';
+                console.error('FFMPEG CONVERSION ERROR:', ffError);
                 return;
             }
 
-            job.status = 'error';
-            job.message = 'Video file siam a ni lo.';
-        } else {
-            job.status = 'error';
-            job.message = lastErrorLine(stderr);
-        }
+            job.status = 'done';
+            job.percent = 100;
+            job.file = mp4Path;
+            job.filename = mp4Name;
+            job.size = fs.statSync(mp4Path).size;
+            job.message = 'iPhone-compatible MP4 zo fel e';
+        });
     });
 }
 
@@ -274,11 +306,7 @@ app.get('/f/:id', (req, res) => {
         return res.status(404).send('File a awm lo emaw a bo tawh.');
     }
 
-    const ext = path.extname(job.filename || job.file).toLowerCase();
-    const mime = ext === '.webm' ? 'video/webm' :
-        ext === '.mov' ? 'video/quicktime' :
-        ext === '.m4v' ? 'video/x-m4v' : 'video/mp4';
-    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Length', job.size);
 
     res.setHeader(
