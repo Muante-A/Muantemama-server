@@ -193,7 +193,7 @@ function startJob(job) {
         }
     };
 
-      proc.stdout.on('data', d => {
+    proc.stdout.on('data', d => {
         buf += d.toString();
         const parts = buf.split(/\r|\n/);
         buf = parts.pop();
@@ -216,9 +216,13 @@ function startJob(job) {
         clearTimeout(killTimer);
         job.status = 'error';
         job.message = 'yt-dlp run theih a ni lo: ' + e.message;
+        console.error('YT-DLP SPAWN ERROR:', e.message);
     });
 
-            console.error('YT-DLP EXIT CODE:', code);
+    proc.on('close', code => {
+        clearTimeout(killTimer);
+
+        console.error('YT-DLP EXIT CODE:', code);
 
         if (job.status === 'error') return;
 
