@@ -1,0 +1,12 @@
+# Render.com one-click deploy (server folder hi GitHub repo-ah dah la, Render-ah "New > Blueprint" thlang rawh)
+services:
+  - type: web
+    name: muantemama-server
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: API_KEY
+        generateValue: true     # Render hian API key a siam sak ang (Dashboard > Environment-ah en theih)
+      - key: PORT
+        value: 8787
