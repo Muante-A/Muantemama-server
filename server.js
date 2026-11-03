@@ -160,6 +160,7 @@ function startJob(job) {
         '--max-filesize', MAX_FILESIZE,
         '--js-runtimes', 'node',
         '--remote-components', 'ejs:github',
+        '--extractor-args', 'youtube:player_client=web,mweb,tv',
         '-o', path.join(job.dir, '%(title).100B [%(id)s].%(ext)s')
     ];
 
@@ -357,38 +358,27 @@ setInterval(() => {
     }
 }, 60 * 1000);
 
-// UPDATE YT-DLP
-function updateYtDlp() {
-    const p = spawn(YTDLP, ['-U'], {
+// LOG YT-DLP VERSION
+// Update yt-dlp in the Render Build Command, not with `yt-dlp -U`
+// because pip-managed installations cannot self-update with that command.
+function logYtDlpVersion() {
+    const p = spawn(YTDLP, ['--version'], {
         stdio: ['ignore', 'pipe', 'pipe']
     });
 
     let output = '';
-
-    p.stdout.on('data', d => {
-        output += d.toString();
-    });
-
-    p.stderr.on('data', d => {
-        output += d.toString();
-    });
-
+    p.stdout.on('data', d => { output += d.toString(); });
+    p.stderr.on('data', d => { output += d.toString(); });
     p.on('error', e => {
-        console.error('yt-dlp update could not start:', e.message);
+        console.error('yt-dlp version check failed:', e.message);
     });
-
     p.on('close', code => {
-        console.log(`yt-dlp update exit code: ${code}`);
-
-        if (output.trim()) {
-            console.log(output.trim().slice(-3000));
-        }
+        console.log('yt-dlp version check exit code:', code);
+        if (output.trim()) console.log('yt-dlp version:', output.trim());
     });
 }
 
-updateYtDlp();
-
-setInterval(updateYtDlp, 12 * 3600 * 1000);
+logYtDlpVersion();
 
 // START SERVER
 app.listen(PORT, () => {
