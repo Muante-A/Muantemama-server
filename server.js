@@ -102,8 +102,7 @@ function lastErrorLine(text) {
 function findOutput(dir) {
     const files = fs.readdirSync(dir)
         .filter(f =>
-            /\.(mp4|m4v|mov|webm|mkv|avi|flv)$/i.test(f) &&
-            !/\.(part|ytdl|temp|tmp)$/i.test(f) &&
+            !/\.(part|ytdl|temp|tmp|jpg|jpeg|png|webp|vtt|srt|json)$/i.test(f) &&
             !/\.f\d+\./.test(f)
         )
         .map(f => ({
@@ -148,13 +147,10 @@ function startJob(job) {
 
     const args = [
         job.url,
-        // Prefer a separate video + audio pair; fall back only to a format
-        // that actually contains video. This prevents audio-only files being
-        // returned as if they were videos.
-        '-f', `bv[height<=${height}]+ba/b[height<=${height}][vcodec!=none]/b[vcodec!=none]`,
-        '-S', `res:${height},ext:mp4:m4a`,
+        '-f', 'bestvideo+bestaudio/best',
+        '-S', `res:${height},vcodec:h264,acodec:aac,ext:mp4:m4a`,
         '--merge-output-format', 'mp4',
-        '--no-keep-video',
+        '--remux-video', 'mp4',
         '--no-playlist',
         '--windows-filenames',
         '--no-mtime',
@@ -279,16 +275,10 @@ app.get('/f/:id', (req, res) => {
     }
 
     const ext = path.extname(job.filename || job.file).toLowerCase();
-    const mimeTypes = {
-        '.mp4': 'video/mp4',
-        '.m4v': 'video/x-m4v',
-        '.mov': 'video/quicktime',
-        '.webm': 'video/webm',
-        '.mkv': 'video/x-matroska',
-        '.avi': 'video/x-msvideo',
-        '.flv': 'video/x-flv'
-    };
-    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+    const mime = ext === '.webm' ? 'video/webm' :
+        ext === '.mov' ? 'video/quicktime' :
+        ext === '.m4v' ? 'video/x-m4v' : 'video/mp4';
+    res.setHeader('Content-Type', mime);
     res.setHeader('Content-Length', job.size);
 
     res.setHeader(
