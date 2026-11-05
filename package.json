@@ -1,0 +1,13 @@
+{
+  "name": "muantemama-downloader-server",
+  "version": "1.3.2",
+  "private": true,
+  "description": "Muantemama Downloader API with iPhone conversion progress reporting",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}
