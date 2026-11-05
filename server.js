@@ -10,7 +10,7 @@ const dns = require('dns').promises;
 const net = require('net');
 
 const PORT = parseInt(process.env.PORT || '8787', 10);
-const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
+const YTDLP = process.env.YTDLP_PATH || path.join(__dirname, 'yt-dlp');
 const FFMPEG_DIR = process.env.FFMPEG_DIR || '';
 const FFMPEG_PATH = process.env.FFMPEG_PATH || (FFMPEG_DIR ? path.join(FFMPEG_DIR, 'ffmpeg') : 'ffmpeg');
 const COOKIES_FILE = process.env.COOKIES_FILE || '';
@@ -164,7 +164,6 @@ function startJob(job) {
         '--max-filesize', MAX_FILESIZE,
         '--js-runtimes', 'node',
         '--remote-components', 'ejs:github',
-        '--extractor-args', 'youtube:player_client=web,mweb,tv',
         '-o', path.join(job.dir, '%(title).100B [%(id)s].%(ext)s')
     ];
 
@@ -318,7 +317,11 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 
 app.get('/health', (req, res) => {
-    res.json({ ok: true });
+    res.json({
+        ok: true,
+        youtube: 'yt-dlp + EJS remote components + Node JavaScript runtime',
+        jsRuntime: 'node'
+    });
 });
 
 // FILE DOWNLOAD
