@@ -1,6 +1,6 @@
 {
   "name": "muantemama-downloader-server",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Muantemama Video Downloader API Server",
   "main": "server.js",
@@ -15,3 +15,4 @@
     "express": "^4.21.2"
   }
 }
+
