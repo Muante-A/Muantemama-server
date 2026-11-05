@@ -1,4 +1,4 @@
-// Muantemama Downloader Server
+// Muantemama Media Downloader Server
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
@@ -9,16 +9,17 @@ const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
 
-const PORT = parseInt(process.env.PORT || '8787', 10);
-const YTDLP = process.env.YTDLP_PATH || path.join(__dirname, 'yt-dlp');
+const PORT = parseInt(process.env.PORT || '10000', 10);
+const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
+const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 const FFMPEG_DIR = process.env.FFMPEG_DIR || '';
-const FFMPEG_PATH = process.env.FFMPEG_PATH || (FFMPEG_DIR ? path.join(FFMPEG_DIR, 'ffmpeg') : 'ffmpeg');
 const COOKIES_FILE = process.env.COOKIES_FILE || '';
 const WORK_DIR = process.env.WORK_DIR || path.join(os.tmpdir(), 'muantemama-jobs');
 const MAX_FILESIZE = process.env.MAX_FILESIZE || '1G';
+
 const TTL_MS = 15 * 60 * 1000;
-const MAX_RUNNING = Math.max(1, Math.min(4, parseInt(process.env.MAX_RUNNING || '2', 10) || 2));
-const JOBS_PER_HOUR = parseInt(process.env.JOBS_PER_HOUR || '30', 10);
+const MAX_RUNNING = 2;
+const JOBS_PER_HOUR = 30;
 
 fs.mkdirSync(WORK_DIR, { recursive: true });
 
@@ -55,15 +56,15 @@ async function validateUrl(raw) {
     }
 
     if (!/^https?:$/.test(u.protocol)) {
-        throw new Error('http/https link chauh a phal.');
+        throw new Error('HTTP/HTTPS link chauh a phal.');
     }
 
     const host = u.hostname.replace(/^\[|\]$/g, '');
-    const addrs = net.isIP(host)
+    const addresses = net.isIP(host)
         ? [{ address: host }]
         : await dns.lookup(host, { all: true });
 
-    if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) {
+    if (!addresses.length || addresses.some(a => isPrivateIp(a.address))) {
         throw new Error('He link hi a phal lo.');
     }
 
@@ -91,11 +92,11 @@ function lastErrorLine(text) {
         .map(l => l.trim())
         .filter(Boolean);
 
-    const errs = lines.filter(l => /^ERROR:/i.test(l));
+    const errors = lines.filter(l => /^ERROR:/i.test(l));
 
     return (
-        errs.length
-            ? errs[errs.length - 1]
+        errors.length
+            ? errors[errors.length - 1]
             : (lines[lines.length - 1] || 'Unknown error')
     ).replace(/^ERROR:\s*/i, '');
 }
@@ -118,21 +119,21 @@ function findOutput(dir) {
 }
 
 function runningCount() {
-    let n = 0;
+    let count = 0;
 
-    for (const j of jobs.values()) {
-        if (j.status === 'running') n++;
+    for (const job of jobs.values()) {
+        if (job.status === 'running') count++;
     }
 
-    return n;
+    return count;
 }
 
 function removeJob(id) {
-    const j = jobs.get(id);
-    if (!j) return;
+    const job = jobs.get(id);
+    if (!job) return;
 
     try {
-        fs.rmSync(j.dir, { recursive: true, force: true });
+        fs.rmSync(job.dir, { recursive: true, force: true });
     } catch (_) {}
 
     jobs.delete(id);
@@ -148,7 +149,8 @@ function startJob(job) {
 
     const args = [
         job.url,
-        '-f', `bestvideo[height<=${height}][vcodec^=avc1][ext=mp4]+bestaudio[acodec^=mp4a]/bestvideo[height<=${height}][ext=mp4]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`,
+        '-f',
+        `bestvideo[height<=${height}][vcodec^=avc1][ext=mp4]+bestaudio[acodec^=mp4a]/bestvideo[height<=${height}][ext=mp4]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`,
         '-S', 'res,fps,vcodec:h264,acodec:aac,ext:mp4:m4a',
         '--merge-output-format', 'mp4',
         '--no-playlist',
@@ -180,33 +182,29 @@ function startJob(job) {
     });
 
     let stderr = '';
-    let buf = '';
+    let buffer = '';
 
-    const onLine = (line) => {
-        line = line.replace(/\x1B\[[0-9;]*m/g, '').trim();
+    proc.stdout.on('data', data => {
+        buffer += data.toString();
+        const parts = buffer.split(/\r|\n/);
+        buffer = parts.pop();
 
-        const m = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%/);
+        parts.forEach(line => {
+            const match = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%/);
 
-        if (m) {
-            job.percent = Math.min(99, parseFloat(m[1]));
-            job.message = 'Downloading...';
-        } else if (/\[Merger\]|\[VideoRemuxer\]/i.test(line)) {
-            job.percent = 99;
-            job.message = 'Video leh audio pawlh mek...';
-        }
-    };
-
-    proc.stdout.on('data', d => {
-        buf += d.toString();
-        const parts = buf.split(/\r|\n/);
-        buf = parts.pop();
-        parts.forEach(onLine);
+            if (match) {
+                job.percent = Math.min(99, parseFloat(match[1]));
+                job.message = 'Downloading...';
+            } else if (/\[Merger\]|\[VideoRemuxer\]/i.test(line)) {
+                job.percent = 99;
+                job.message = 'Video leh audio pawlh mek...';
+            }
+        });
     });
 
-    proc.stderr.on('data', d => {
-        const msg = d.toString();
-        stderr += msg;
-        console.error('YT-DLP ERROR:', msg);
+    proc.stderr.on('data', data => {
+        stderr += data.toString();
+        console.error('YT-DLP:', data.toString());
     });
 
     const killTimer = setTimeout(() => {
@@ -215,16 +213,15 @@ function startJob(job) {
         } catch (_) {}
     }, 20 * 60 * 1000);
 
-    proc.on('error', e => {
+    proc.on('error', error => {
         clearTimeout(killTimer);
         job.status = 'error';
-        job.message = 'yt-dlp run theih a ni lo: ' + e.message;
-        console.error('YT-DLP SPAWN ERROR:', e.message);
+        job.message = 'yt-dlp run theih a ni lo: ' + error.message;
+        console.error('YT-DLP SPAWN ERROR:', error.message);
     });
 
-    proc.on('close', async code => {
+    proc.on('close', code => {
         clearTimeout(killTimer);
-        console.error('YT-DLP EXIT CODE:', code);
 
         if (job.status === 'error') return;
 
@@ -234,72 +231,88 @@ function startJob(job) {
             return;
         }
 
-        const out = findOutput(job.dir);
-        if (!out) {
+        const output = findOutput(job.dir);
+
+        if (!output) {
             job.status = 'error';
             job.message = 'Video file siam a ni lo.';
             return;
         }
 
-        // Fast remux first: stream-copy avoids slow CPU-heavy video re-encoding.
-        // Fall back to H.264/AAC encoding only when the source cannot be remuxed.
-        const mp4Name = path.basename(out.f).replace(/\\.[^.]+$/, '') + '.mp4';
-        const mp4Path = path.join(job.dir, mp4Name);
-        const runFfmpeg = (encodeFallback) => {
-            job.message = encodeFallback
-                ? 'iPhone compatibility convert mek...'
-                : 'MP4 finalize mek...';
-            job.percent = 99;
+        // iPhone-compatible MP4 conversion
+        const baseName = path.parse(output.f).name;
+        const mp4Name = baseName + '.mp4';
+        const tempPath = path.join(job.dir, baseName + '.iphone-temp.mp4');
+        const finalPath = path.join(job.dir, mp4Name);
 
-            const ffArgs = ['-y', '-i', out.p, '-map', '0:v:0', '-map', '0:a?'];
-            if (encodeFallback) {
-                ffArgs.push(
-                    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-                    '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k'
-                );
-            } else {
-                ffArgs.push('-c', 'copy');
-            }
-            ffArgs.push('-movflags', '+faststart', mp4Path);
+        job.message = 'iPhone-compatible video convert mek...';
+        job.percent = 99;
 
-            const ff = spawn(FFMPEG_PATH, ffArgs, {
-                stdio: ['ignore', 'ignore', 'pipe']
-            });
-            let ffError = '';
-            ff.stderr.on('data', d => { ffError += d.toString(); });
-            ff.on('error', e => {
+        const ffmpegArgs = [
+            '-y',
+            '-i', output.p,
+            '-map', '0:v:0',
+            '-map', '0:a?',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-movflags', '+faststart',
+            tempPath
+        ];
+
+        const ffmpeg = spawn(FFMPEG_PATH, ffmpegArgs, {
+            stdio: ['ignore', 'ignore', 'pipe']
+        });
+
+        let ffmpegError = '';
+
+        ffmpeg.stderr.on('data', data => {
+            ffmpegError += data.toString();
+        });
+
+        ffmpeg.on('error', error => {
+            job.status = 'error';
+            job.message = 'FFmpeg awm lo: ' + error.message;
+            console.error('FFMPEG ERROR:', error.message);
+        });
+
+        ffmpeg.on('close', code => {
+            if (job.status === 'error') return;
+
+            if (
+                code !== 0 ||
+                !fs.existsSync(tempPath) ||
+                fs.statSync(tempPath).size === 0
+            ) {
                 job.status = 'error';
-                job.message = 'FFmpeg awm lo. Render-ah ffmpeg install ngai: ' + e.message;
-                console.error('FFMPEG SPAWN ERROR:', e.message);
-            });
-            ff.on('close', ffCode => {
-                if (job.status === 'error') return;
-                const valid = ffCode === 0 && fs.existsSync(mp4Path) &&
-                    fs.statSync(mp4Path).size > 0;
-                if (!valid && !encodeFallback) {
-                    try { fs.rmSync(mp4Path, { force: true }); } catch (_) {}
-                    return runFfmpeg(true);
-                }
-                if (!valid) {
-                    job.status = 'error';
-                    job.message = ffError.trim().split(/\\r?\\n/).slice(-1)[0] ||
-                        'MP4 conversion a hlawhchham.';
-                    console.error('FFMPEG CONVERSION ERROR:', ffError);
-                    return;
+                job.message = lastErrorLine(ffmpegError) ||
+                    'iPhone MP4 conversion a hlawhchham.';
+                console.error('FFMPEG CONVERSION ERROR:', ffmpegError);
+                return;
+            }
+
+            try {
+                fs.renameSync(tempPath, finalPath);
+
+                if (output.p !== finalPath) {
+                    fs.rmSync(output.p, { force: true });
                 }
 
                 job.status = 'done';
                 job.percent = 100;
-                job.file = mp4Path;
+                job.file = finalPath;
                 job.filename = mp4Name;
-                job.size = fs.statSync(mp4Path).size;
+                job.size = fs.statSync(finalPath).size;
                 job.message = 'iPhone-compatible MP4 zo fel e';
-                if (out.p !== mp4Path) {
-                    try { fs.rmSync(out.p, { force: true }); } catch (_) {}
-                }
-            });
-        };
-        runFfmpeg(false);
+
+            } catch (error) {
+                job.status = 'error';
+                job.message = 'MP4 save a hlawhchham: ' + error.message;
+            }
+        });
     });
 }
 
@@ -316,15 +329,12 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' }));
 
+// HEALTH CHECK
 app.get('/health', (req, res) => {
-    res.json({
-        ok: true,
-        youtube: 'yt-dlp + EJS remote components + Node JavaScript runtime',
-        jsRuntime: 'node'
-    });
+    res.json({ ok: true });
 });
 
-// FILE DOWNLOAD
+// DOWNLOAD FILE
 app.get('/f/:id', (req, res) => {
     const job = jobs.get(req.params.id);
 
@@ -387,27 +397,27 @@ app.post('/api/jobs', async (req, res) => {
 
         res.json({ id });
 
-    } catch (e) {
-        res.status(400).json({ error: e.message });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
 });
 
-// CHECK PROGRESS
+// CHECK DOWNLOAD PROGRESS
 app.get('/api/jobs/:id', (req, res) => {
-    const j = jobs.get(req.params.id);
+    const job = jobs.get(req.params.id);
 
-    if (!j) {
+    if (!job) {
         return res.status(404).json({
             error: 'Job a awm lo.'
         });
     }
 
     res.json({
-        status: j.status,
-        percent: j.percent,
-        message: j.message,
-        filename: j.filename,
-        size: j.size
+        status: job.status,
+        percent: job.percent,
+        message: job.message,
+        filename: job.filename,
+        size: job.size
     });
 });
 
@@ -415,30 +425,39 @@ app.get('/api/jobs/:id', (req, res) => {
 setInterval(() => {
     const now = Date.now();
 
-    for (const [id, j] of jobs) {
-        if (now - j.created > TTL_MS && j.status !== 'running') {
+    for (const [id, job] of jobs) {
+        if (now - job.created > TTL_MS && job.status !== 'running') {
             removeJob(id);
         }
     }
 }, 60 * 1000);
 
-// LOG YT-DLP VERSION
-// Update yt-dlp in the Render Build Command, not with `yt-dlp -U`
-// because pip-managed installations cannot self-update with that command.
+// CHECK YT-DLP VERSION
 function logYtDlpVersion() {
-    const p = spawn(YTDLP, ['--version'], {
+    const process = spawn(YTDLP, ['--version'], {
         stdio: ['ignore', 'pipe', 'pipe']
     });
 
     let output = '';
-    p.stdout.on('data', d => { output += d.toString(); });
-    p.stderr.on('data', d => { output += d.toString(); });
-    p.on('error', e => {
-        console.error('yt-dlp version check failed:', e.message);
+
+    process.stdout.on('data', data => {
+        output += data.toString();
     });
-    p.on('close', code => {
+
+    process.stderr.on('data', data => {
+        output += data.toString();
+    });
+
+    process.on('error', error => {
+        console.error('yt-dlp version check failed:', error.message);
+    });
+
+    process.on('close', code => {
         console.log('yt-dlp version check exit code:', code);
-        if (output.trim()) console.log('yt-dlp version:', output.trim());
+
+        if (output.trim()) {
+            console.log('yt-dlp version:', output.trim());
+        }
     });
 }
 
