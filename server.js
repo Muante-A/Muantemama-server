@@ -17,7 +17,7 @@ const COOKIES_FILE = process.env.COOKIES_FILE || '';
 const WORK_DIR = process.env.WORK_DIR || path.join(os.tmpdir(), 'muantemama-jobs');
 const MAX_FILESIZE = process.env.MAX_FILESIZE || '1G';
 const TTL_MS = 15 * 60 * 1000;
-const MAX_RUNNING = parseInt(process.env.MAX_RUNNING || '2', 10);
+const MAX_RUNNING = Math.max(1, Math.min(4, parseInt(process.env.MAX_RUNNING || '2', 10) || 2));
 const JOBS_PER_HOUR = parseInt(process.env.JOBS_PER_HOUR || '30', 10);
 
 fs.mkdirSync(WORK_DIR, { recursive: true });
@@ -148,16 +148,19 @@ function startJob(job) {
 
     const args = [
         job.url,
-        '-f', 'bestvideo+bestaudio/best',
-        '-S', `res:${height},vcodec:h264,acodec:aac,ext:mp4:m4a`,
+        '-f', `bestvideo[height<=${height}][vcodec^=avc1][ext=mp4]+bestaudio[acodec^=mp4a]/bestvideo[height<=${height}][ext=mp4]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`,
+        '-S', 'res,fps,vcodec:h264,acodec:aac,ext:mp4:m4a',
         '--merge-output-format', 'mp4',
         '--no-playlist',
         '--windows-filenames',
         '--no-mtime',
         '--newline',
-        '--retries', '5',
-        '--fragment-retries', '5',
-        '--socket-timeout', '30',
+        '--retries', '10',
+        '--fragment-retries', '10',
+        '--retry-sleep', 'fragment:1:5',
+        '--socket-timeout', '20',
+        '--concurrent-fragments', '8',
+        '--buffer-size', '16K',
         '--max-filesize', MAX_FILESIZE,
         '--js-runtimes', 'node',
         '--remote-components', 'ejs:github',
@@ -239,45 +242,65 @@ function startJob(job) {
             return;
         }
 
-        // Convert to iPhone-friendly MP4: H.264 video + AAC audio.
+        // Fast remux first: stream-copy avoids slow CPU-heavy video re-encoding.
+        // Fall back to H.264/AAC encoding only when the source cannot be remuxed.
         const mp4Name = path.basename(out.f).replace(/\\.[^.]+$/, '') + '.mp4';
         const mp4Path = path.join(job.dir, mp4Name);
-        job.message = 'iPhone tan MP4 convert mek...';
-        job.percent = 99;
+        const runFfmpeg = (encodeFallback) => {
+            job.message = encodeFallback
+                ? 'iPhone compatibility convert mek...'
+                : 'MP4 finalize mek...';
+            job.percent = 99;
 
-        const ff = spawn(FFMPEG_PATH, [
-            '-y', '-i', out.p,
-            '-map', '0:v:0', '-map', '0:a?',
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-            '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac', '-b:a', '128k',
-            '-movflags', '+faststart',
-            mp4Path
-        ], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-        let ffError = '';
-        ff.stderr.on('data', d => { ffError += d.toString(); });
-        ff.on('error', e => {
-            job.status = 'error';
-            job.message = 'FFmpeg awm lo. Render-ah ffmpeg install ngai: ' + e.message;
-            console.error('FFMPEG SPAWN ERROR:', e.message);
-        });
-        ff.on('close', ffCode => {
-            if (job.status === 'error') return;
-            if (ffCode !== 0 || !fs.existsSync(mp4Path) || fs.statSync(mp4Path).size === 0) {
-                job.status = 'error';
-                job.message = ffError.trim().split(/\\r?\\n/).slice(-1)[0] || 'MP4 conversion a hlawhchham.';
-                console.error('FFMPEG CONVERSION ERROR:', ffError);
-                return;
+            const ffArgs = ['-y', '-i', out.p, '-map', '0:v:0', '-map', '0:a?'];
+            if (encodeFallback) {
+                ffArgs.push(
+                    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+                    '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k'
+                );
+            } else {
+                ffArgs.push('-c', 'copy');
             }
+            ffArgs.push('-movflags', '+faststart', mp4Path);
 
-            job.status = 'done';
-            job.percent = 100;
-            job.file = mp4Path;
-            job.filename = mp4Name;
-            job.size = fs.statSync(mp4Path).size;
-            job.message = 'iPhone-compatible MP4 zo fel e';
-        });
+            const ff = spawn(FFMPEG_PATH, ffArgs, {
+                stdio: ['ignore', 'ignore', 'pipe']
+            });
+            let ffError = '';
+            ff.stderr.on('data', d => { ffError += d.toString(); });
+            ff.on('error', e => {
+                job.status = 'error';
+                job.message = 'FFmpeg awm lo. Render-ah ffmpeg install ngai: ' + e.message;
+                console.error('FFMPEG SPAWN ERROR:', e.message);
+            });
+            ff.on('close', ffCode => {
+                if (job.status === 'error') return;
+                const valid = ffCode === 0 && fs.existsSync(mp4Path) &&
+                    fs.statSync(mp4Path).size > 0;
+                if (!valid && !encodeFallback) {
+                    try { fs.rmSync(mp4Path, { force: true }); } catch (_) {}
+                    return runFfmpeg(true);
+                }
+                if (!valid) {
+                    job.status = 'error';
+                    job.message = ffError.trim().split(/\\r?\\n/).slice(-1)[0] ||
+                        'MP4 conversion a hlawhchham.';
+                    console.error('FFMPEG CONVERSION ERROR:', ffError);
+                    return;
+                }
+
+                job.status = 'done';
+                job.percent = 100;
+                job.file = mp4Path;
+                job.filename = mp4Name;
+                job.size = fs.statSync(mp4Path).size;
+                job.message = 'iPhone-compatible MP4 zo fel e';
+                if (out.p !== mp4Path) {
+                    try { fs.rmSync(out.p, { force: true }); } catch (_) {}
+                }
+            });
+        };
+        runFfmpeg(false);
     });
 }
 
